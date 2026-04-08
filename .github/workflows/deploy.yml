@@ -34,6 +34,11 @@ jobs:
         env:
           EXPO_NO_TELEMETRY: 1
 
+      - name: Fix asset paths for GitHub Pages subpath
+        run: |
+          find dist -name "*.html" -exec sed -i 's|"/_expo/|"/POS/_expo/|g' {} +
+          find dist -name "*.html" -exec sed -i "s|'/_expo/|'/POS/_expo/|g" {} +
+
       - name: Add .nojekyll
         run: touch dist/.nojekyll
 
