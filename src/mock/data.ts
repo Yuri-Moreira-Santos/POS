@@ -48,7 +48,7 @@ export const abastecimentosPendentes: Abastecimento[] = [
     combustivel: "Gasolina Comum",
     litros: 12.5,
     preco: 20.0,
-    hora: "10:45",
+    hora: "10:46",
     status: "pendente",
   },
   {
