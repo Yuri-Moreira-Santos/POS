@@ -32,8 +32,7 @@ jobs:
       - name: Build web
         run: bun run build:web
         env:
-          EXPO_NO_TELEMETRY: 
-          EXPO_PUBLIC_BASE_URL: /POS
+          EXPO_NO_TELEMETRY: 1
 
       - name: Fix asset paths for GitHub Pages subpath
         run: |
