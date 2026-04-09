@@ -1,9 +1,12 @@
+import { useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
   SafeAreaView,
   TouchableOpacity,
+  ScrollView,
+  TextInput,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -11,44 +14,73 @@ import { Header } from "../src/components/Header";
 import { Footer } from "../src/components/Footer";
 import { Button } from "../src/components/Button";
 import { colors, spacing, typography, radius, shadows } from "../src/theme";
-import { abastecimentosPendentes, type FormaPagamento } from "../src/mock/data";
-import { useState } from "react";
+import {
+  abastecimentosPendentes,
+  type FormaPagamento,
+  type ItemAdicional,
+} from "../src/mock/data";
 
-interface FormaPagamentoOption {
-  id: FormaPagamento;
-  label: string;
-  icon?: string;
-  isPix?: boolean;
-}
-
-const formasPagamento: FormaPagamentoOption[] = [
+const formasPagamento: { id: FormaPagamento; label: string; isPix?: boolean }[] = [
   { id: "pix", label: "PIX", isPix: true },
   { id: "credito", label: "Crédito" },
   { id: "debito", label: "Débito" },
   { id: "dinheiro", label: "Dinheiro" },
 ];
 
+function getDigits(v: string) {
+  return v.replace(/\D/g, "");
+}
+
+function formatDocumento(value: string): string {
+  const digits = getDigits(value).slice(0, 14);
+  if (digits.length <= 11) {
+    return digits
+      .replace(/(\d{3})(\d)/, "$1.$2")
+      .replace(/(\d{3})\.(\d{3})(\d)/, "$1.$2.$3")
+      .replace(/(\d{3})\.(\d{3})\.(\d{3})(\d)/, "$1.$2.$3-$4");
+  }
+  return digits
+    .replace(/(\d{2})(\d)/, "$1.$2")
+    .replace(/(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
+    .replace(/(\d{2})\.(\d{3})\.(\d{3})(\d)/, "$1.$2.$3/$4")
+    .replace(/(\d{2})\.(\d{3})\.(\d{3})\/(\d{4})(\d)/, "$1.$2.$3/$4-$5");
+}
+
+function detectTipo(value: string): "cpf" | "cnpj" | null {
+  const len = getDigits(value).length;
+  if (len === 11) return "cpf";
+  if (len === 14) return "cnpj";
+  return null;
+}
+
 export default function Pagamento() {
   const router = useRouter();
-  const { id, itens, total, cpf, cnpj } = useLocalSearchParams<{
+  const { id, itens, total, faturado, placa } = useLocalSearchParams<{
     id: string;
     itens: string;
     total: string;
-    cpf: string;
-    cnpj: string;
+    faturado: string;
+    placa: string;
   }>();
 
-  const abastecimento = abastecimentosPendentes.find((a) => a.id === id) ?? abastecimentosPendentes[0];
+  const abastecimento =
+    abastecimentosPendentes.find((a) => a.id === id) ?? abastecimentosPendentes[0];
   const totalValue = parseFloat(total ?? "0");
+  const itensAdicionais: ItemAdicional[] = itens ? JSON.parse(itens) : [];
+  const isFaturado = faturado === "1";
 
   const [formaSelecionada, setFormaSelecionada] = useState<FormaPagamento | null>(null);
+  const [documento, setDocumento] = useState("");
+
+  const tipoDetectado = detectTipo(documento);
+  const digitCount = getDigits(documento).length;
 
   function handleContinuar() {
     if (!formaSelecionada) return;
     if (formaSelecionada === "pix") {
       router.push({
         pathname: "/pagamento-pix",
-        params: { id, total, cpf, cnpj },
+        params: { id, total },
       });
     }
   }
@@ -60,23 +92,65 @@ export default function Pagamento() {
         showBack
         onBackPress={() => router.back()}
       />
-      <View style={styles.content}>
-        <View style={styles.resumoCard}>
-          <Text style={[typography.h3, styles.resumoTitle]}>Resumo</Text>
-          <View style={styles.resumoItem}>
-            <Text style={typography.h3}>{`${abastecimento.bomba} - ${abastecimento.bico}`}</Text>
-            <View style={styles.resumoRow}>
-              <Text style={typography.body2}>{abastecimento.combustivel}</Text>
-              <Text style={typography.body2}>{abastecimento.hora}</Text>
-            </View>
-            <Text style={typography.body2}>Aditivo + itens</Text>
-            <View style={styles.resumoTotal}>
-              <Text style={typography.body2}>Total</Text>
-              <Text style={typography.price}>
-                R$ {totalValue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.card}>
+          <Text style={[typography.h3, { marginBottom: spacing.xs }]}>
+            Identificar Cliente
+          </Text>
+          <Text style={[typography.body2, { marginBottom: spacing.md }]}>
+            Informe CPF ou CNPJ do cliente para nota fiscal
+          </Text>
+
+          {isFaturado ? (
+            <View style={styles.faturadoBadge}>
+              <Ionicons name="checkmark-circle" size={18} color={colors.accent} />
+              <Text style={styles.faturadoText}>
+                Cliente Faturado — Placa: {placa || "—"}
               </Text>
             </View>
-          </View>
+          ) : (
+            <>
+              <Text style={styles.inputLabel}>CPF ou CNPJ</Text>
+              <View
+                style={[
+                  styles.inputWrapper,
+                  tipoDetectado && styles.inputWrapperValid,
+                ]}
+              >
+                <TextInput
+                  style={styles.input}
+                  placeholder={digitCount > 11 ? "00.000.000/0000-00" : "000.000.000-00"}
+                  placeholderTextColor={colors.divider}
+                  value={documento}
+                  onChangeText={(v) => {
+                    if (getDigits(v).length <= 14) setDocumento(formatDocumento(v));
+                  }}
+                  keyboardType="numeric"
+                  maxLength={18}
+                  accessibilityLabel="CPF ou CNPJ"
+                />
+                {tipoDetectado ? (
+                  <Ionicons name="checkmark-circle" size={18} color={colors.accent} />
+                ) : digitCount > 0 ? (
+                  <Text style={styles.tipoHint}>
+                    {digitCount < 11
+                      ? `${11 - digitCount} p/ CPF`
+                      : `${14 - digitCount} p/ CNPJ`}
+                  </Text>
+                ) : null}
+              </View>
+              {tipoDetectado && (
+                <Text style={styles.tipoLabel}>
+                  {tipoDetectado === "cpf" ? "CPF identificado" : "CNPJ identificado"}
+                </Text>
+              )}
+            </>
+          )}
         </View>
 
         <Text style={[typography.body1, styles.formaTitle]}>Forma de Pagamento</Text>
@@ -90,11 +164,15 @@ export default function Pagamento() {
                 onPress={() => setFormaSelecionada(forma.id)}
                 activeOpacity={0.75}
                 accessibilityRole="button"
-                accessibilityLabel={`Forma de pagamento: ${forma.label}`}
+                accessibilityLabel={forma.label}
                 accessibilityState={{ selected: isSelected }}
               >
                 {forma.isPix && (
-                  <PixIcon color={isSelected ? colors.textIcons : colors.accent} />
+                  <Ionicons
+                    name="diamond-outline"
+                    size={22}
+                    color={isSelected ? colors.textIcons : colors.accent}
+                  />
                 )}
                 <Text
                   style={[
@@ -109,14 +187,30 @@ export default function Pagamento() {
           })}
         </View>
 
-        <View style={styles.totals}>
-          <View style={styles.totalRow}>
+        <View style={styles.card}>
+          <Text style={[typography.h3, { marginBottom: spacing.sm }]}>Resumo</Text>
+          <Text style={typography.h3}>{`${abastecimento.bomba} - ${abastecimento.bico}`}</Text>
+          <View style={styles.rowBetween}>
+            <Text style={typography.body2}>{abastecimento.combustivel}</Text>
+            <Text style={typography.body2}>{abastecimento.hora}</Text>
+          </View>
+          {itensAdicionais.length > 0 && (
+            <Text style={[typography.body2, { marginTop: 2 }]}>Aditivo + itens</Text>
+          )}
+          <View style={[styles.rowBetween, styles.totalResumoRow]}>
+            <Text style={typography.body2}>Total</Text>
+            <Text style={typography.price}>
+              R$ {totalValue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+            </Text>
+          </View>
+          <View style={styles.divider} />
+          <View style={styles.rowBetween}>
             <Text style={typography.body2}>Subtotal</Text>
             <Text style={[typography.body1, { color: colors.accent }]}>
               R$ {totalValue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
             </Text>
           </View>
-          <View style={[styles.totalRow, styles.totalGeral]}>
+          <View style={[styles.rowBetween, styles.totalGeral]}>
             <Text style={typography.h3}>TOTAL GERAL</Text>
             <Text style={typography.priceLarge}>
               R$ {totalValue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
@@ -139,17 +233,9 @@ export default function Pagamento() {
             style={{ flex: 1 }}
           />
         </View>
-      </View>
+      </ScrollView>
       <Footer />
     </SafeAreaView>
-  );
-}
-
-function PixIcon({ color }: { color: string }) {
-  return (
-    <View style={{ width: 28, height: 28 }}>
-      <Ionicons name="diamond-outline" size={28} color={color} />
-    </View>
   );
 }
 
@@ -158,32 +244,65 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  content: {
+  scroll: {
     flex: 1,
+  },
+  content: {
     padding: spacing.md,
     gap: spacing.md,
   },
-  resumoCard: {
+  card: {
     backgroundColor: colors.surface,
     borderRadius: radius.md,
     padding: spacing.md,
     ...shadows.card,
   },
-  resumoTitle: {
-    marginBottom: spacing.sm,
+  inputLabel: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: colors.primaryText,
+    marginBottom: 6,
   },
-  resumoItem: {
-    gap: 4,
-  },
-  resumoRow: {
+  inputWrapper: {
     flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  resumoTotal: {
-    flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    marginTop: spacing.xs,
+    borderWidth: 1.5,
+    borderColor: colors.divider,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.md,
+    height: 48,
+  },
+  inputWrapperValid: {
+    borderColor: colors.accent,
+  },
+  input: {
+    flex: 1,
+    fontSize: 15,
+    color: colors.primaryText,
+    outlineStyle: "none",
+  } as any,
+  tipoHint: {
+    fontSize: 11,
+    color: colors.secondaryText,
+  },
+  tipoLabel: {
+    fontSize: 12,
+    color: colors.accent,
+    fontWeight: "500",
+    marginTop: 4,
+  },
+  faturadoBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    backgroundColor: `${colors.accent}18`,
+    borderRadius: radius.sm,
+    padding: spacing.sm,
+  },
+  faturadoText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: colors.accent,
   },
   formaTitle: {
     fontWeight: "600",
@@ -211,23 +330,21 @@ const styles = StyleSheet.create({
     backgroundColor: colors.darkPrimary,
     borderColor: colors.darkPrimary,
   },
-  totals: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    gap: spacing.sm,
-    ...shadows.card,
-  },
-  totalRow: {
+  rowBetween: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
-  totalGeral: {
-    paddingTop: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.divider,
+  totalResumoRow: {
     marginTop: spacing.xs,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: colors.divider,
+    marginVertical: spacing.sm,
+  },
+  totalGeral: {
+    paddingTop: spacing.xs,
   },
   actions: {
     flexDirection: "row",

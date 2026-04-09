@@ -6,6 +6,10 @@ import {
   StyleSheet,
   SafeAreaView,
   TouchableOpacity,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -22,9 +26,12 @@ import {
 export default function ResumoCompra() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const abastecimento = abastecimentosPendentes.find((a) => a.id === id) ?? abastecimentosPendentes[0];
+  const abastecimento =
+    abastecimentosPendentes.find((a) => a.id === id) ?? abastecimentosPendentes[0];
 
   const [itens, setItens] = useState<ItemAdicional[]>([]);
+  const [modalPlacaVisible, setModalPlacaVisible] = useState(false);
+  const [placa, setPlaca] = useState("");
 
   function handleAddItem() {
     const primeiroDisponivel = itensAdicionaisDisponiveis.find(
@@ -35,27 +42,37 @@ export default function ResumoCompra() {
     }
   }
 
-  function handleChangeQuantidade(id: string, delta: number) {
+  function handleChangeQuantidade(itemId: string, delta: number) {
     setItens((prev) =>
       prev
-        .map((i) => (i.id === id ? { ...i, quantidade: i.quantidade + delta } : i))
+        .map((i) => (i.id === itemId ? { ...i, quantidade: i.quantidade + delta } : i))
         .filter((i) => i.quantidade > 0)
     );
   }
 
   const subtotal =
-    abastecimento.preco +
-    itens.reduce((acc, i) => acc + i.preco * i.quantidade, 0);
+    abastecimento.preco + itens.reduce((acc, i) => acc + i.preco * i.quantidade, 0);
 
-  function handleContinuar() {
+  function navegarParaPagamento(faturado = false, placaValue = "") {
     router.push({
-      pathname: "/identificar-cliente",
+      pathname: "/pagamento",
       params: {
         id: abastecimento.id,
         itens: JSON.stringify(itens),
         total: subtotal.toString(),
+        faturado: faturado ? "1" : "0",
+        placa: placaValue,
       },
     });
+  }
+
+  function handleContinuar() {
+    navegarParaPagamento(false);
+  }
+
+  function handleClienteFaturadoConfirmar() {
+    setModalPlacaVisible(false);
+    navegarParaPagamento(true, placa);
   }
 
   return (
@@ -70,15 +87,17 @@ export default function ResumoCompra() {
           <Text style={[typography.h3, styles.sectionTitle]}>Abastecimento</Text>
           <View style={styles.abastecimentoCard}>
             <Text style={typography.h3}>{`${abastecimento.bomba} - ${abastecimento.bico}`}</Text>
-            <View style={styles.abastecimentoRow}>
+            <View style={styles.rowBetween}>
               <Text style={typography.body2}>{abastecimento.combustivel}</Text>
               <Text style={typography.body2}>{abastecimento.hora}</Text>
             </View>
-            <View style={styles.abastecimentoFooter}>
+            <View style={styles.rowBetween}>
               <View style={styles.litros}>
                 <Ionicons name="water-outline" size={16} color={colors.secondaryText} />
-                <Text style={typography.body1}>{abastecimento.litros.toLocaleString("pt-BR")} L</Text>
-                <Text style={[typography.body2, styles.precoUnitario]}>
+                <Text style={typography.body1}>
+                  {abastecimento.litros.toLocaleString("pt-BR")} L
+                </Text>
+                <Text style={[typography.body2, { marginLeft: 4 }]}>
                   | R$ {(abastecimento.preco / abastecimento.litros).toFixed(2)}
                 </Text>
               </View>
@@ -91,7 +110,7 @@ export default function ResumoCompra() {
 
         {itens.length > 0 && (
           <View style={styles.section}>
-            <Text style={[typography.body2, styles.itensTitle]}>+ Itens Adicionais</Text>
+            <Text style={[typography.body2, styles.itensLabel]}>+ Itens Adicionais</Text>
             {itens.map((item) => (
               <View key={item.id} style={styles.itemRow}>
                 <View style={styles.itemInfo}>
@@ -100,7 +119,8 @@ export default function ResumoCompra() {
                     {item.tipo ? ` ${item.tipo}` : ""}
                   </Text>
                   <Text style={[typography.body2, { color: colors.accent }]}>
-                    R$ {item.preco.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} x{item.quantidade}
+                    R$ {item.preco.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} x
+                    {item.quantidade}
                   </Text>
                 </View>
                 <View style={styles.quantidadeControl}>
@@ -108,7 +128,7 @@ export default function ResumoCompra() {
                     style={styles.qtyBtn}
                     onPress={() => handleChangeQuantidade(item.id, -1)}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    accessibilityLabel="Diminuir quantidade"
+                    accessibilityLabel="Diminuir"
                     accessibilityRole="button"
                   >
                     <Text style={styles.qtyBtnText}>-</Text>
@@ -118,7 +138,7 @@ export default function ResumoCompra() {
                     style={styles.qtyBtn}
                     onPress={() => handleChangeQuantidade(item.id, 1)}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    accessibilityLabel="Aumentar quantidade"
+                    accessibilityLabel="Aumentar"
                     accessibilityRole="button"
                   >
                     <Text style={styles.qtyBtnText}>+</Text>
@@ -140,17 +160,23 @@ export default function ResumoCompra() {
           accessibilityLabel="Adicionar item"
         >
           <Ionicons name="add" size={20} color={colors.primaryText} />
-          <Text style={[typography.body1, styles.addItemText]}>Adicionar Item</Text>
+          <Text style={[typography.body1, { fontWeight: "600" }]}>Adicionar Item</Text>
         </TouchableOpacity>
 
+        <Button
+          label="Cliente Faturado"
+          variant="secondary"
+          onPress={() => setModalPlacaVisible(true)}
+        />
+
         <View style={styles.totals}>
-          <View style={styles.totalRow}>
+          <View style={styles.rowBetween}>
             <Text style={typography.body2}>Subtotal</Text>
             <Text style={[typography.body1, { color: colors.accent }]}>
               R$ {subtotal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
             </Text>
           </View>
-          <View style={[styles.totalRow, styles.totalGeral]}>
+          <View style={[styles.rowBetween, styles.totalGeral]}>
             <Text style={typography.h3}>TOTAL GERAL</Text>
             <Text style={typography.priceLarge}>
               R$ {subtotal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
@@ -174,6 +200,59 @@ export default function ResumoCompra() {
         />
       </View>
       <Footer />
+
+      <Modal
+        visible={modalPlacaVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setModalPlacaVisible(false)}
+      >
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Ionicons name="checkmark-circle" size={28} color={colors.accent} />
+              <Text style={[typography.h3, styles.modalTitle]}>Cliente faturado</Text>
+            </View>
+            <Text style={[typography.body2, styles.modalSubtitle]}>
+              Informe a placa do veiculo
+            </Text>
+
+            <Text style={styles.inputLabel}>Placa</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="AAA-0000"
+              placeholderTextColor={colors.divider}
+              value={placa}
+              onChangeText={(v) => setPlaca(v.toUpperCase().slice(0, 8))}
+              autoCapitalize="characters"
+              maxLength={8}
+              accessibilityLabel="Placa do veículo"
+            />
+
+            <View style={styles.modalActions}>
+              <Button
+                label="Cancelar"
+                variant="outline"
+                onPress={() => {
+                  setModalPlacaVisible(false);
+                  setPlaca("");
+                }}
+                style={{ flex: 1 }}
+              />
+              <Button
+                label="Continuar"
+                variant="primary"
+                onPress={handleClienteFaturadoConfirmar}
+                disabled={placa.length < 7}
+                style={{ flex: 1 }}
+              />
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -202,28 +281,20 @@ const styles = StyleSheet.create({
   abastecimentoCard: {
     gap: 4,
   },
-  abastecimentoRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  abastecimentoFooter: {
+  rowBetween: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginTop: spacing.xs,
   },
   litros: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.xs,
   },
-  precoUnitario: {
-    marginLeft: 4,
-  },
-  itensTitle: {
-    marginBottom: spacing.sm,
-    color: colors.primaryText,
+  itensLabel: {
     fontWeight: "600",
+    color: colors.primaryText,
+    marginBottom: spacing.sm,
   },
   itemRow: {
     flexDirection: "row",
@@ -283,20 +354,12 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     ...shadows.card,
   },
-  addItemText: {
-    fontWeight: "600",
-  },
   totals: {
     backgroundColor: colors.surface,
     borderRadius: radius.md,
     padding: spacing.md,
     gap: spacing.sm,
     ...shadows.card,
-  },
-  totalRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
   },
   totalGeral: {
     paddingTop: spacing.sm,
@@ -311,5 +374,56 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderTopWidth: 1,
     borderTopColor: colors.divider,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: spacing.lg,
+  },
+  modalCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    width: "100%",
+    maxWidth: 400,
+    gap: spacing.sm,
+    ...shadows.elevated,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  modalTitle: {
+    color: colors.primaryText,
+  },
+  modalSubtitle: {
+    marginBottom: spacing.sm,
+  },
+  inputLabel: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: colors.primaryText,
+    marginBottom: 6,
+  },
+  input: {
+    height: 48,
+    borderWidth: 1.5,
+    borderColor: colors.divider,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.md,
+    fontSize: 16,
+    fontWeight: "600",
+    color: colors.primaryText,
+    letterSpacing: 2,
+    outlineStyle: "none",
+  } as any,
+  modalActions: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    marginTop: spacing.sm,
   },
 });

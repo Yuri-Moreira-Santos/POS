@@ -1,89 +1,87 @@
-import {
-  View,
-  Text,
-  ScrollView,
-  StyleSheet,
-  SafeAreaView,
-} from "react-native";
+import { useEffect, useRef } from "react";
+import { View, Text, StyleSheet, Animated } from "react-native";
 import { useRouter } from "expo-router";
-import { Header } from "../src/components/Header";
-import { AppStatusBar } from "../src/components/StatusBar";
-import { Footer } from "../src/components/Footer";
-import { AbastecimentoCard } from "../src/components/AbastecimentoCard";
-import { AbastecimentoProcessadoItem } from "../src/components/AbastecimentoProcessadoItem";
-import { colors, spacing, typography } from "../src/theme";
-import {
-  abastecimentosPendentes,
-  abastecimentosProcessados,
-  type Abastecimento,
-} from "../src/mock/data";
+import { Ionicons } from "@expo/vector-icons";
+import { colors } from "../src/theme";
 
-export default function TelaInicial() {
+export default function LoadingScreen() {
   const router = useRouter();
+  const logoOpacity = useRef(new Animated.Value(0)).current;
+  const logoScale = useRef(new Animated.Value(0.85)).current;
 
-  function handleAbastecimentoPress(item: Abastecimento) {
-    router.push({
-      pathname: "/resumo-compra",
-      params: { id: item.id },
+  useEffect(() => {
+    Animated.sequence([
+      Animated.parallel([
+        Animated.timing(logoOpacity, {
+          toValue: 1,
+          duration: 700,
+          useNativeDriver: true,
+        }),
+        Animated.spring(logoScale, {
+          toValue: 1,
+          friction: 6,
+          tension: 80,
+          useNativeDriver: true,
+        }),
+      ]),
+      Animated.delay(1800),
+      Animated.timing(logoOpacity, {
+        toValue: 0,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      router.replace("/menu");
     });
-  }
+  }, []);
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <Header title="Tela Posto - Abastecimentos pendentes" showMenu />
-      <AppStatusBar connected caixaAberto />
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
+    <View style={styles.container}>
+      <Animated.View
+        style={[styles.content, { opacity: logoOpacity, transform: [{ scale: logoScale }] }]}
       >
-        <Text style={[typography.label, styles.sectionTitle]}>
-          Abastecimentos pendentes
-        </Text>
-        {abastecimentosPendentes.map((item) => (
-          <AbastecimentoCard
-            key={item.id}
-            item={item}
-            onPress={handleAbastecimentoPress}
-          />
-        ))}
-
-        <Text style={[typography.label, styles.sectionTitle, styles.sectionTitleSpaced]}>
-          Últimos Abastecimentos Processados
-        </Text>
-        <View style={styles.processadosCard}>
-          {abastecimentosProcessados.map((item) => (
-            <AbastecimentoProcessadoItem key={item.id} item={item} />
-          ))}
+        <View style={styles.logoWrapper}>
+          <View style={styles.logoCircle}>
+            <Ionicons name="storefront" size={56} color={colors.darkPrimary} />
+          </View>
         </View>
-      </ScrollView>
-      <Footer />
-    </SafeAreaView>
+        <Text style={styles.title}>E-Comercial</Text>
+      </Animated.View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
+  container: {
     flex: 1,
-    backgroundColor: colors.background,
-  },
-  scroll: {
-    flex: 1,
+    backgroundColor: colors.darkPrimary,
+    justifyContent: "center",
+    alignItems: "center",
   },
   content: {
-    padding: spacing.md,
+    alignItems: "center",
+    gap: 20,
   },
-  sectionTitle: {
-    color: colors.primaryText,
-    marginBottom: spacing.sm,
+  logoWrapper: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    justifyContent: "center",
+    alignItems: "center",
   },
-  sectionTitleSpaced: {
-    marginTop: spacing.lg,
+  logoCircle: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: colors.textIcons,
+    justifyContent: "center",
+    alignItems: "center",
   },
-  processadosCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 8,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.xs,
+  title: {
+    fontSize: 28,
+    fontWeight: "700",
+    color: colors.textIcons,
+    letterSpacing: 1,
   },
 });
