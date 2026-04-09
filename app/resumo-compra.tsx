@@ -20,7 +20,9 @@ import { colors, spacing, typography, radius, shadows } from "../src/theme";
 import {
   abastecimentosPendentes,
   itensAdicionaisDisponiveis,
+  buscarClientePorPlaca,
   type ItemAdicional,
+  type ClienteFaturado,
 } from "../src/mock/data";
 
 export default function ResumoCompra() {
@@ -32,6 +34,8 @@ export default function ResumoCompra() {
   const [itens, setItens] = useState<ItemAdicional[]>([]);
   const [modalPlacaVisible, setModalPlacaVisible] = useState(false);
   const [placa, setPlaca] = useState("");
+  const [clienteEncontrado, setClienteEncontrado] = useState<ClienteFaturado | null>(null);
+  const [placaInvalida, setPlacaInvalida] = useState(false);
 
   function handleAddItem() {
     const primeiroDisponivel = itensAdicionaisDisponiveis.find(
@@ -53,7 +57,11 @@ export default function ResumoCompra() {
   const subtotal =
     abastecimento.preco + itens.reduce((acc, i) => acc + i.preco * i.quantidade, 0);
 
-  function navegarParaPagamento(faturado = false, placaValue = "") {
+  function navegarParaPagamento(
+    faturado = false,
+    placaValue = "",
+    cliente: ClienteFaturado | null = null
+  ) {
     router.push({
       pathname: "/pagamento",
       params: {
@@ -62,6 +70,8 @@ export default function ResumoCompra() {
         total: subtotal.toString(),
         faturado: faturado ? "1" : "0",
         placa: placaValue,
+        empresa: cliente?.empresa ?? "",
+        cnpjEmpresa: cliente?.cnpj ?? "",
       },
     });
   }
@@ -70,9 +80,30 @@ export default function ResumoCompra() {
     navegarParaPagamento(false);
   }
 
+  function handlePlacaChange(value: string) {
+    const formatted = value.toUpperCase().slice(0, 8);
+    setPlaca(formatted);
+    setPlacaInvalida(false);
+    if (formatted.replace("-", "").length >= 7) {
+      const cliente = buscarClientePorPlaca(formatted);
+      setClienteEncontrado(cliente);
+      setPlacaInvalida(cliente === null);
+    } else {
+      setClienteEncontrado(null);
+    }
+  }
+
   function handleClienteFaturadoConfirmar() {
+    if (!clienteEncontrado) return;
     setModalPlacaVisible(false);
-    navegarParaPagamento(true, placa);
+    navegarParaPagamento(true, placa, clienteEncontrado);
+  }
+
+  function handleModalClose() {
+    setModalPlacaVisible(false);
+    setPlaca("");
+    setClienteEncontrado(null);
+    setPlacaInvalida(false);
   }
 
   return (
@@ -220,33 +251,51 @@ export default function ResumoCompra() {
               Informe a placa do veiculo
             </Text>
 
+            {clienteEncontrado && (
+              <View style={styles.empresaCard}>
+                <Text style={styles.empresaNome}>{clienteEncontrado.empresa}</Text>
+                <Text style={styles.empresaCnpj}>{clienteEncontrado.cnpj}</Text>
+              </View>
+            )}
+
             <Text style={styles.inputLabel}>Placa</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="AAA-0000"
-              placeholderTextColor={colors.divider}
-              value={placa}
-              onChangeText={(v) => setPlaca(v.toUpperCase().slice(0, 8))}
-              autoCapitalize="characters"
-              maxLength={8}
-              accessibilityLabel="Placa do veículo"
-            />
+            <View style={[
+              styles.inputWrapper,
+              clienteEncontrado ? styles.inputWrapperValid : placaInvalida ? styles.inputWrapperError : null,
+            ]}>
+              <TextInput
+                style={styles.input}
+                placeholder="AAA-0000"
+                placeholderTextColor={colors.divider}
+                value={placa}
+                onChangeText={handlePlacaChange}
+                autoCapitalize="characters"
+                maxLength={8}
+                accessibilityLabel="Placa do veículo"
+              />
+              {clienteEncontrado && (
+                <Ionicons name="checkmark-circle" size={18} color={colors.accent} />
+              )}
+              {placaInvalida && (
+                <Ionicons name="close-circle" size={18} color={colors.error} />
+              )}
+            </View>
+            {placaInvalida && (
+              <Text style={styles.errorText}>Placa não encontrada no sistema</Text>
+            )}
 
             <View style={styles.modalActions}>
               <Button
                 label="Cancelar"
                 variant="outline"
-                onPress={() => {
-                  setModalPlacaVisible(false);
-                  setPlaca("");
-                }}
+                onPress={handleModalClose}
                 style={{ flex: 1 }}
               />
               <Button
                 label="Continuar"
                 variant="primary"
                 onPress={handleClienteFaturadoConfirmar}
-                disabled={placa.length < 7}
+                disabled={!clienteEncontrado}
                 style={{ flex: 1 }}
               />
             </View>
@@ -409,18 +458,53 @@ const styles = StyleSheet.create({
     color: colors.primaryText,
     marginBottom: 6,
   },
-  input: {
-    height: 48,
+  empresaCard: {
+    backgroundColor: `${colors.accent}15`,
+    borderRadius: radius.sm,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.accent,
+    padding: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  empresaNome: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: colors.primaryText,
+  },
+  empresaCnpj: {
+    fontSize: 12,
+    color: colors.secondaryText,
+    marginTop: 2,
+  },
+  inputWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
     borderWidth: 1.5,
     borderColor: colors.divider,
     borderRadius: radius.sm,
     paddingHorizontal: spacing.md,
+    height: 48,
+    gap: spacing.xs,
+  },
+  inputWrapperValid: {
+    borderColor: colors.accent,
+  },
+  inputWrapperError: {
+    borderColor: colors.error,
+  },
+  input: {
+    flex: 1,
     fontSize: 16,
     fontWeight: "600",
     color: colors.primaryText,
     letterSpacing: 2,
     outlineStyle: "none",
   } as any,
+  errorText: {
+    fontSize: 12,
+    color: colors.error,
+    marginTop: 4,
+  },
   modalActions: {
     flexDirection: "row",
     gap: spacing.sm,

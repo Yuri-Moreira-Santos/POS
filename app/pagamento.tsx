@@ -55,12 +55,14 @@ function detectTipo(value: string): "cpf" | "cnpj" | null {
 
 export default function Pagamento() {
   const router = useRouter();
-  const { id, itens, total, faturado, placa } = useLocalSearchParams<{
+  const { id, itens, total, faturado, placa, empresa, cnpjEmpresa } = useLocalSearchParams<{
     id: string;
     itens: string;
     total: string;
     faturado: string;
     placa: string;
+    empresa: string;
+    cnpjEmpresa: string;
   }>();
 
   const abastecimento =
@@ -76,6 +78,13 @@ export default function Pagamento() {
   const digitCount = getDigits(documento).length;
 
   function handleContinuar() {
+    if (isFaturado) {
+      router.replace({
+        pathname: "/abastecimentos",
+        params: { successMsg: "Cliente faturado com sucesso" },
+      });
+      return;
+    }
     if (!formaSelecionada) return;
     if (formaSelecionada === "pix") {
       router.push({
@@ -107,11 +116,19 @@ export default function Pagamento() {
           </Text>
 
           {isFaturado ? (
-            <View style={styles.faturadoBadge}>
-              <Ionicons name="checkmark-circle" size={18} color={colors.accent} />
-              <Text style={styles.faturadoText}>
-                Cliente Faturado — Placa: {placa || "—"}
-              </Text>
+            <View style={styles.faturadoCard}>
+              {empresa ? (
+                <View style={styles.faturadoEmpresa}>
+                  <Text style={styles.faturadoEmpresaNome}>{empresa}</Text>
+                  <Text style={styles.faturadoEmpresaCnpj}>{cnpjEmpresa}</Text>
+                </View>
+              ) : null}
+              <View style={styles.faturadoBadge}>
+                <Ionicons name="checkmark-circle" size={18} color={colors.accent} />
+                <Text style={styles.faturadoText}>
+                  Cliente Faturado — Placa: {placa || "—"}
+                </Text>
+              </View>
             </View>
           ) : (
             <>
@@ -153,39 +170,43 @@ export default function Pagamento() {
           )}
         </View>
 
-        <Text style={[typography.body1, styles.formaTitle]}>Forma de Pagamento</Text>
-        <View style={styles.formasGrid}>
-          {formasPagamento.map((forma) => {
-            const isSelected = formaSelecionada === forma.id;
-            return (
-              <TouchableOpacity
-                key={forma.id}
-                style={[styles.formaBtn, isSelected && styles.formaBtnSelected]}
-                onPress={() => setFormaSelecionada(forma.id)}
-                activeOpacity={0.75}
-                accessibilityRole="button"
-                accessibilityLabel={forma.label}
-                accessibilityState={{ selected: isSelected }}
-              >
-                {forma.isPix && (
-                  <Ionicons
-                    name="diamond-outline"
-                    size={22}
-                    color={isSelected ? colors.textIcons : colors.accent}
-                  />
-                )}
-                <Text
-                  style={[
-                    typography.h3,
-                    { color: isSelected ? colors.textIcons : colors.primaryText },
-                  ]}
-                >
-                  {forma.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+        {!isFaturado && (
+          <>
+            <Text style={[typography.body1, styles.formaTitle]}>Forma de Pagamento</Text>
+            <View style={styles.formasGrid}>
+              {formasPagamento.map((forma) => {
+                const isSelected = formaSelecionada === forma.id;
+                return (
+                  <TouchableOpacity
+                    key={forma.id}
+                    style={[styles.formaBtn, isSelected && styles.formaBtnSelected]}
+                    onPress={() => setFormaSelecionada(forma.id)}
+                    activeOpacity={0.75}
+                    accessibilityRole="button"
+                    accessibilityLabel={forma.label}
+                    accessibilityState={{ selected: isSelected }}
+                  >
+                    {forma.isPix && (
+                      <Ionicons
+                        name="diamond-outline"
+                        size={22}
+                        color={isSelected ? colors.textIcons : colors.accent}
+                      />
+                    )}
+                    <Text
+                      style={[
+                        typography.h3,
+                        { color: isSelected ? colors.textIcons : colors.primaryText },
+                      ]}
+                    >
+                      {forma.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </>
+        )}
 
         <View style={styles.card}>
           <Text style={[typography.h3, { marginBottom: spacing.sm }]}>Resumo</Text>
@@ -226,10 +247,10 @@ export default function Pagamento() {
             style={{ flex: 1 }}
           />
           <Button
-            label="Continuar"
+            label={isFaturado ? "Finalizar" : "Continuar"}
             variant="primary"
             onPress={handleContinuar}
-            disabled={!formaSelecionada}
+            disabled={!isFaturado && !formaSelecionada}
             style={{ flex: 1 }}
           />
         </View>
@@ -290,6 +311,26 @@ const styles = StyleSheet.create({
     color: colors.accent,
     fontWeight: "500",
     marginTop: 4,
+  },
+  faturadoCard: {
+    gap: spacing.sm,
+  },
+  faturadoEmpresa: {
+    backgroundColor: `${colors.accent}15`,
+    borderRadius: radius.sm,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.accent,
+    padding: spacing.sm,
+  },
+  faturadoEmpresaNome: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: colors.primaryText,
+  },
+  faturadoEmpresaCnpj: {
+    fontSize: 12,
+    color: colors.secondaryText,
+    marginTop: 2,
   },
   faturadoBadge: {
     flexDirection: "row",

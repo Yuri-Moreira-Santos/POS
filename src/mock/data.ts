@@ -1,5 +1,24 @@
 export type StatusAbastecimento = "pendente" | "pago" | "faturado";
 
+export interface ClienteFaturado {
+  placa: string;
+  cnpj: string;
+  empresa: string;
+}
+
+export const clientesFaturados: ClienteFaturado[] = [
+  { placa: "ABC-1234", cnpj: "12.345.678/0001-99", empresa: "Transportes Silva Ltda" },
+  { placa: "DEF-5678", cnpj: "98.765.432/0001-11", empresa: "Logística Verde S.A." },
+  { placa: "GHI-9012", cnpj: "45.678.901/0001-55", empresa: "Frota Rápida ME" },
+];
+
+export function buscarClientePorPlaca(placa: string): ClienteFaturado | null {
+  const normalized = placa.replace(/\s/g, "").toUpperCase();
+  return clientesFaturados.find(
+    (c) => c.placa.replace("-", "").toUpperCase() === normalized.replace("-", "")
+  ) ?? null;
+}
+
 export type FormaPagamento = "pix" | "credito" | "debito" | "dinheiro";
 
 export interface Abastecimento {
